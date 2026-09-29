@@ -253,6 +253,30 @@
        nil)))
 
 
+#+dotcl
+(progn
+  (defun make-lock (&optional name)
+    (apply #'dotcl:make-recursive-lock (and name `(,(string name)))))
+  ;; If `wait?' is false, and the lock is not available, returns without executing the body.
+  (defmacro with-lock ((lock &key (wait? t)) &body body)
+    (let ((lock-var (gensym "LOCK-")))
+      `(let ((,lock-var ,lock))
+	 (when (dotcl:acquire-lock ,lock-var ,wait?)
+	   (unwind-protect
+		(progn . ,body)
+	     (dotcl:release-lock ,lock-var))))))
+  ;; For those implementations that support SMP but don't give us direct ways
+  ;; to generate memory barriers, we assume that grabbing a lock suffices.
+  (deflex *Memory-Barrier-Lock*
+    (dotcl:make-lock "Memory Barrier Lock"))
+  (defmacro read-memory-barrier ()
+    '(with-lock (*Memory-Barrier-Lock*)
+       nil))
+  (defmacro write-memory-barrier ()
+    '(with-lock (*Memory-Barrier-Lock*)
+       nil)))
+
+
 #+sbcl
 (defmacro defglobal (name value &optional doc-string)
   `(sb-ext:defglobal ,name ,value ,doc-string))
